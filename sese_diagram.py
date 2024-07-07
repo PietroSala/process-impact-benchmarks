@@ -125,17 +125,17 @@ RESOLUTION = 300
 def print_sese_diagram(expression, h = 0, probabilities={}, impacts={}, loop_thresholds = {}, outfile=PATH_IMAGE_BPMN_LARK, outfile_svg = PATH_IMAGE_BPMN_LARK_SVG,
                         graph_options = {}, durations = {}, names = {}, delays = {}, impacts_names = [], resolution_bpmn = RESOLUTION):
     tree = PARSER.parse(expression)
-    diagram = wrap_sese_diagram(tree=tree, h=h, probabilities= probabilities, impacts= impacts, loop_thresholds=loop_thresholds, durations=durations, names=names, delays=delays, impacts_names=impacts_names)
+    diagram = wrap_sese_diagram(tree=tree, h=h, probabilities=probabilities, impacts=impacts, loop_thresholds=loop_thresholds, durations=durations, names=names, delays=delays, impacts_names=impacts_names)
     global_options = f'graph[ { ", ".join([k+"="+str(graph_options[k]) for k in graph_options])  } ];'
     dot_string = "digraph my_graph{ \n rankdir=LR; \n" + global_options + "\n" + diagram +"}"
     graphs = pydot.graph_from_dot_data(dot_string)
     graph = graphs[0]  
     graph.write_svg(outfile_svg)
     graph.write_svg(PATH_IMAGE_BPMN_LARK_SVG)
-    #print(graph)  
     graph.set('dpi', resolution_bpmn)
     graph.write_png(outfile)    
-    return  Image.open(outfile)   
+    return Image.open(outfile)
+  
 
 def dot_sese_diagram(t, id = 0, h = 0, prob={}, imp={}, loops = {}, dur = {}, imp_names = []):
     if type(t) == Token:
@@ -206,20 +206,19 @@ def wrap_sese_diagram(tree, h = 0, probabilities={}, impacts={}, loop_thresholds
     return code
 
 
-
 def dot_task(id, name, h=0, imp=None, dur=None, imp_names = []):
     label = name
-    #print(f"impacts in dot task : {imp}")
-    if imp is not None: # modifica per aggiungere impatti e durate in modo leggibile 
-        if h == 0:
-            imp =  ", ".join(f"{key}: {value}" for key, value in zip(imp_names, imp))
-            label += f", impacts: {imp}"
-            label += f", dur: {str(dur)}"  
-        else: 
-            label += str(imp[0:-h])
-            label += str(imp[-h:]) 
-            label += f", dur:{str(dur)}"   
-    return f'\n node_{id}[label="{label}", shape=rectangle style="rounded,filled" fillcolor="lightblue"];'
+    impact_str = ""
+    if imp is not None:
+        # Always truncate impact values to two decimal places
+        truncated_imp = np.round(imp, 2)
+        # Only display the numerical values without labels
+        impact_str = "\\n".join([f"{v:.2f}" for v in truncated_imp])
+        
+    label = f"{{{label}|{impact_str}}}"
+    return f'\n node_{id}[label="{label}", shape=record, style="rounded,filled" fillcolor="lightblue"];'
+
+
 
 def dot_exclusive_gateway(id, label="X"):
     return f'\n node_{id}[shape=diamond label={label} style="filled" fillcolor=orange];'
