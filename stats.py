@@ -36,16 +36,6 @@ def max_independent_xor(expression):
     
     return _max_independent_xor(tree)
 
-def compute_cosine_distances_stats(vectors):
-    n = len(vectors)
-    distances = []
-    for i in range(n):
-        for j in range(i+1, n):
-            distance = cosine(vectors[i], vectors[j])
-            distances.append(distance)
-    distances = np.array(distances)
-    return np.mean(distances), np.std(distances)
-
 
 def max_pareto_length(tree):
     if isinstance(tree, Token):
