@@ -3,6 +3,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from tqdm import tqdm
+import plotly.express as px
 
 
 def create_log_heatmap(df, x_col, y_col, value_col, title, use_std=False, colorscale='Viridis', colorbar_x=0, colorbar_y=1.1, log=True):
@@ -92,3 +93,129 @@ def missing_values(df, nested=None, independent=None, process_number=None, dimen
                     for m in  modes:
                         if not ((df['nested'] == i) & (df['independent'] == j) & (df['process_number'] == l) & (df['dimensions'] == d) & (df['mode'] == m)).any():
                             print(f"Missing values for nested={i}, independent={j}, process_number={l}, dimensions={d}, mode={m}")
+
+
+
+def plot_multi_dimension_mode_surfaces(df, dimensions=None, modes=None, nested_col='nested', independent_col='independent', 
+                                       mode_col='mode', dimensions_col='dimensions', pareto_col='pareto_time', 
+                                       use_log_scale=True):
+    """
+    Create multiple 3D surface plots for specified modes across specified dimensions.
+    If dimensions or modes are None, use all unique values from the DataFrame.
+    
+    Parameters:
+    df (pd.DataFrame): The input DataFrame containing the data.
+    dimensions (list or None): List of dimensions to plot. If None, use all unique dimensions.
+    modes (list or None): List of modes to include in the plots. If None, use all unique modes.
+    nested_col (str): Name of the column for nested variable.
+    independent_col (str): Name of the column for independent variable.
+    mode_col (str): Name of the column for mode.
+    dimensions_col (str): Name of the column for dimensions.
+    pareto_col (str): Name of the column for pareto time.
+    use_log_scale (bool): Whether to use logarithmic scale for z-axis. Default is True.
+    
+    Returns:
+    plotly.graph_objs._figure.Figure: The resulting Plotly figure.
+    """
+    
+    # Check if all required columns are present in the DataFrame
+    required_columns = [nested_col, independent_col, mode_col, dimensions_col, pareto_col]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"The following required columns are missing from the DataFrame: {missing_columns}")
+
+    # Use all unique dimensions and modes if None is provided
+    if dimensions is None:
+        dimensions = sorted(df[dimensions_col].unique())
+    if modes is None:
+        modes = sorted(df[mode_col].unique())
+
+    # Set up the subplot grid
+    n_dims = len(dimensions)
+    n_cols = min(3, n_dims)
+    n_rows = (n_dims + n_cols - 1) // n_cols
+
+    fig = make_subplots(
+        rows=n_rows, cols=n_cols,
+        specs=[[{'type': 'surface'}] * n_cols] * n_rows,
+        subplot_titles=[f'Dimension {dim}' for dim in dimensions],
+        horizontal_spacing=0.05,
+        vertical_spacing=0.05
+    )
+
+    # Color map for modes
+    color_scale = px.colors.qualitative.Plotly
+    mode_colors = {mode: color_scale[i % len(color_scale)] for i, mode in enumerate(modes)}
+
+    # Create a surface plot for each dimension and mode
+    for i, dim in enumerate(dimensions):
+        row = i // n_cols + 1
+        col = i % n_cols + 1
+        
+        dim_data = df[df[dimensions_col] == dim]
+        
+        for mode in modes:
+            mode_data = dim_data[dim_data[mode_col] == mode]
+            if mode_data.empty:
+                continue  # Skip if no data for this mode-dimension combination
+            
+            pivot = mode_data.pivot_table(values=pareto_col, index=nested_col, columns=independent_col, aggfunc='mean')
+            
+            if not pivot.empty:
+                z_values = np.log10(pivot.values) if use_log_scale else pivot.values
+                z_values[~np.isfinite(z_values)] = np.nan
+
+                fig.add_trace(
+                    go.Surface(
+                        z=z_values,
+                        x=pivot.columns,
+                        y=pivot.index,
+                        colorscale=[[0, mode_colors[mode]], [1, mode_colors[mode]]],
+                        name=f'Mode {mode}',
+                        showscale=False,
+                        opacity=0.7,
+                        showlegend=(i == 0),  # Only show legend for the first subplot
+                        legendgroup=f'Mode {mode}',  # Group legend items
+                        hoverinfo='name+x+y+z'
+                    ),
+                    row=row, col=col
+                )
+
+    # Update layout
+    z_axis_title = f'{"Log10 of " if use_log_scale else ""}Average {pareto_col}'
+    fig.update_layout(
+        height=400 * n_rows,
+        width=1200 + 150,  # Add extra width for the side legend
+        title=dict(
+            text=f'{z_axis_title} vs {nested_col} and {independent_col} for Each Dimension',
+            y=0.98,  # Move title up
+            x=0.5,
+            xanchor='center',
+            yanchor='top'
+        ),
+        scene=dict(
+            xaxis_title=independent_col,
+            yaxis_title=nested_col,
+            zaxis_title=z_axis_title
+        ),
+        legend=dict(
+            title='Modes',
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=1.01,
+            bgcolor="rgba(255, 255, 255, 0.5)",  # Semi-transparent background
+        ),
+        margin=dict(r=150, t=100, b=40, l=40)  # Adjust right margin for legend
+    )
+
+    # Update all subplots to have the same axis labels
+    for i in range(1, n_dims + 1):
+        fig.update_scenes(
+            xaxis_title=independent_col,
+            yaxis_title=nested_col,
+            zaxis_title=z_axis_title,
+            row=(i-1)//n_cols+1, col=(i-1)%n_cols+1
+        )
+
+    return fig
