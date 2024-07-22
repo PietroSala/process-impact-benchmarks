@@ -219,3 +219,103 @@ def plot_multi_dimension_mode_surfaces(df, dimensions=None, modes=None, nested_c
         )
 
     return fig
+
+def plot_multi_dimension_stat_plots(df, dimensions=None, modes=None, nested_col='nested', independent_col='independent', 
+                                    mode_col='mode', dimensions_col='dimensions', pareto_col='pareto_time', 
+                                    use_log_scale=True, stat_measure='std'):
+    """
+    Create multiple 2D line plots for mean or standard deviation of pareto time across specified dimensions and modes.
+    
+    Parameters:
+    df (pd.DataFrame): The input DataFrame containing the data.
+    dimensions (list or None): List of dimensions to plot. If None, use all unique dimensions.
+    modes (list or None): List of modes to include in the plots. If None, use all unique modes.
+    nested_col (str): Name of the column for nested variable.
+    independent_col (str): Name of the column for independent variable.
+    mode_col (str): Name of the column for mode.
+    dimensions_col (str): Name of the column for dimensions.
+    pareto_col (str): Name of the column for pareto time.
+    use_log_scale (bool): Whether to use logarithmic scale for y-axis. Default is True.
+    stat_measure (str): Statistical measure to plot. Either 'mean' or 'std'. Default is 'std'.
+    
+    Returns:
+    plotly.graph_objs._figure.Figure: The resulting Plotly figure.
+    """
+    
+    if stat_measure not in ['mean', 'std']:
+        raise ValueError("stat_measure must be either 'mean' or 'std'")
+
+    # Calculate the product of nested and independent
+    df['nested_independent_product'] = df[nested_col] * df[independent_col]
+
+    # Get unique dimensions and modes
+    if dimensions is None:
+        dimensions = sorted(df[dimensions_col].unique())
+    if modes is None:
+        modes = sorted(df[mode_col].unique())
+
+    # Set up the subplot grid
+    n_dims = len(dimensions)
+    n_cols = 3
+    n_rows = (n_dims + n_cols - 1) // n_cols
+
+    fig = make_subplots(
+        rows=n_rows, cols=n_cols,
+        subplot_titles=[f'Dimension {dim}' for dim in dimensions],
+        shared_xaxes=True,
+        shared_yaxes=True,
+        x_title='Product of Nested and Independent',
+        y_title=f'{"Standard Deviation" if stat_measure == "std" else "Mean"} of {pareto_col} {"(Log Scale)" if use_log_scale else ""}'
+    )
+
+    # Color map for modes
+    color_map = px.colors.qualitative.Plotly
+
+    # Create a plot for each dimension
+    for i, dim in enumerate(dimensions):
+        row = i // n_cols + 1
+        col = i % n_cols + 1
+        
+        dim_data = df[df[dimensions_col] == dim]
+        
+        for j, mode in enumerate(modes):
+            mode_data = dim_data[dim_data[mode_col] == mode]
+            if stat_measure == 'std':
+                grouped = mode_data.groupby('nested_independent_product')[pareto_col].std().reset_index()
+            else:  # mean
+                grouped = mode_data.groupby('nested_independent_product')[pareto_col].mean().reset_index()
+            
+            # Filter out any zero or NaN values
+            grouped = grouped[grouped[pareto_col] > 0]
+            
+            if not grouped.empty:
+                fig.add_trace(
+                    go.Scatter(
+                        x=grouped['nested_independent_product'],
+                        y=grouped[pareto_col],
+                        mode='lines+markers',
+                        name=f'Mode {mode}',
+                        legendgroup=f'Mode {mode}',
+                        showlegend=(i == 0),  # Show legend only for the first subplot
+                        marker=dict(color=color_map[j % len(color_map)]),
+                        line=dict(color=color_map[j % len(color_map)]),
+                        text=[f'{"Std Dev" if stat_measure == "std" else "Mean"}: {y:.2f}' for y in grouped[pareto_col]],
+                        hoverinfo='text+x+name'
+                    ),
+                    row=row, col=col
+                )
+
+        # Update y-axis to log scale for this subplot if specified
+        if use_log_scale:
+            fig.update_yaxes(type="log", row=row, col=col)
+
+    # Update layout
+    fig.update_layout(
+        height=300 * n_rows,
+        width=1000,
+        title_text=f'{"Standard Deviation" if stat_measure == "std" else "Mean"} of {pareto_col} vs Product of {nested_col} and {independent_col} for Each Dimension',
+        legend_title='Modes',
+        showlegend=True,
+    )
+
+    return fig
