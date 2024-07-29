@@ -256,12 +256,25 @@ def plot_multi_dimension_stat_plots(df, dimensions=None, modes=None, nested_col=
 
     # Set up the subplot grid
     n_dims = len(dimensions)
-    n_cols = 3
+    n_cols = 4  # 4 graphs per row
     n_rows = (n_dims + n_cols - 1) // n_cols
+    last_row_cols = n_dims % n_cols if n_dims % n_cols != 0 else n_cols
+
+    # Calculate the starting column for centering the last row
+    start_col = (n_cols - last_row_cols) // 2 + 1 if last_row_cols < n_cols else 1
+
+    # Create subplot titles with correct alignment
+    subplot_titles = []
+    for i in range(n_rows):
+        row_titles = [f'Dimension {dim}' for dim in dimensions[i*n_cols:(i+1)*n_cols]]
+        if i == n_rows - 1 and last_row_cols < n_cols:
+            # Center the titles in the last row
+            row_titles = [''] * (start_col - 1) + row_titles + [''] * (n_cols - last_row_cols - (start_col - 1))
+        subplot_titles.extend(row_titles)
 
     fig = make_subplots(
         rows=n_rows, cols=n_cols,
-        subplot_titles=[f'Dimension {dim}' for dim in dimensions],
+        subplot_titles=subplot_titles,
         shared_xaxes=True,
         shared_yaxes=True,
         x_title='Product of Nested and Independent',
@@ -276,6 +289,10 @@ def plot_multi_dimension_stat_plots(df, dimensions=None, modes=None, nested_col=
         row = i // n_cols + 1
         col = i % n_cols + 1
         
+        # Adjust column for the last row to center the plots
+        if row == n_rows and last_row_cols < n_cols:
+            col = (i % n_cols) + start_col
+
         dim_data = df[df[dimensions_col] == dim]
         
         for j, mode in enumerate(modes):
@@ -308,14 +325,27 @@ def plot_multi_dimension_stat_plots(df, dimensions=None, modes=None, nested_col=
         # Update y-axis to log scale for this subplot if specified
         if use_log_scale:
             fig.update_yaxes(type="log", row=row, col=col)
+        
+        # Ensure x and y axes are visible for all plots
+        fig.update_xaxes(showticklabels=True, row=row, col=col)
+        fig.update_yaxes(showticklabels=True, row=row, col=col)
 
     # Update layout
     fig.update_layout(
-        height=300 * n_rows,
-        width=1000,
+        height=300 * n_rows + 50,  # Added extra height for the two-row legend
+        width=1200,
         title_text=f'{"Standard Deviation" if stat_measure == "std" else "Mean"} of {pareto_col} vs Product of {nested_col} and {independent_col} for Each Dimension',
         legend_title='Modes',
         showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,  # Moved further down to accommodate two rows
+            xanchor="center",
+            x=0.5,
+            traceorder="grouped",
+            tracegroupgap=10  # Add gap between legend groups for better separation into two rows
+        )
     )
 
     return fig
