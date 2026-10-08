@@ -1,0 +1,29 @@
+{
+  "valid": true,
+  "processes": 1000,
+  "files": 100,
+  "variants_per_pair": 10,
+  "nested_range": [
+    1,
+    10
+  ],
+  "independent_range": [
+    1,
+    10
+  ],
+  "metrics": "XOR + loop",
+  "all_targets_match": true,
+  "all_processes_have_loops": true,
+  "all_loop_ancestor_paths_valid": true,
+  "all_task_labels_unique_and_sequential": true,
+  "loops_per_process_min_max": [
+    1,
+    73
+  ],
+  "tasks_per_process_min_max": [
+    1,
+    266
+  ],
+  "total_loops": 10668,
+  "total_tasks": 42403
+}

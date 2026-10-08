@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.tmp
+bpmn_preview.*
+bpmn.svg

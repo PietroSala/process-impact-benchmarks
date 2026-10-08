@@ -1,0 +1,17 @@
+{
+  "metrics": "xor_plus_loop_v1",
+  "sampling": "constrained",
+  "sampler_version": 1,
+  "probabilities_xor_parallel_sequence_loop": [
+    0.3,
+    0.2,
+    0.2,
+    0.3
+  ],
+  "seed": 42,
+  "max_nested": 10,
+  "max_independent": 10,
+  "processes_per_pair": 10,
+  "replacements_per_attempt": 1000,
+  "loop_nesting": "an XOR is required between consecutive ancestor loops"
+}

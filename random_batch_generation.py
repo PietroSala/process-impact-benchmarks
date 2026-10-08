@@ -4,6 +4,14 @@ from tqdm import tqdm
 
 
 def generate_process(probabilities, target_max_nested_xor, target_max_independent_xor, number_of_replacements, forbidden_processes):
+    """Generate a process meeting the XOR + loop targets within a replacement budget.
+
+    Probabilities are ordered XOR, parallel, sequence, loop. Three weights
+    retain the legacy loop-free mode; None enables all four structures.
+    Loop nesting is constrained by replace_random_underscore.
+    Both target parameters count XOR and loop regions; their names are kept
+    for compatibility with existing callers.
+    """
     current_string = SEED_STRING
     
     for _ in range(number_of_replacements):
@@ -34,6 +42,11 @@ def generate_process(probabilities, target_max_nested_xor, target_max_independen
 
 def generate_multiple_processes(probabilities, target_max_nested_xor, target_max_independent_xor, 
                                 number_of_replacements, forbidden_processes, num_processes, num_trials):
+    """Request num_processes distinct variants (use 10 for each benchmark pair).
+
+    Complexity targets count both XOR and loop regions.
+    Returns fewer variants if the trial budget cannot satisfy the targets.
+    """
     generated_processes = set()
     current_forbidden = set(forbidden_processes)  # Create a copy to avoid modifying the original set
 

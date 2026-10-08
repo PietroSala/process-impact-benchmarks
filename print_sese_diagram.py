@@ -1,127 +1,61 @@
-from lark import Tree, Token
-import pydot
-from pydot import *
-from PIL import Image
-from env import PATH_IMAGE_BPMN_LARK, PATH_IMAGE_BPMN_LARK_SVG, SESE_PARSER, RESOLUTION
+"""Render a process with its XOR + loop complexity measures.
+
+Examples (run from the project directory):
+    python print_sese_diagram.py --expression "(! (T1 ^ T2))"
+    python print_sese_diagram.py --file generated_processes_loops_regenerated/generated_processes_full_1_4.txt
 """
-    funzioni prese dal notebook
-"""
-def print_sese_diagram(expression, h = 0, probabilities={}, impacts={}, loop_thresholds = {}, outfile=PATH_IMAGE_BPMN_LARK, outfile_svg = PATH_IMAGE_BPMN_LARK_SVG,
-                        graph_options = {}, durations = {}, names = {}, delays = {}, impacts_names = [], resolution_bpmn = RESOLUTION):
-    tree = SESE_PARSER.parse(expression)
-    diagram = wrap_sese_diagram(tree=tree, h=h, probabilities= probabilities, impacts= impacts, loop_thresholds=loop_thresholds, durations=durations, names=names, delays=delays, impacts_names=impacts_names)
-    global_options = f'graph[ { ", ".join([k+"="+str(graph_options[k]) for k in graph_options])  } ];'
-    dot_string = "digraph my_graph{ \n rankdir=LR; \n" + global_options + "\n" + diagram +"}"
-    graphs = pydot.graph_from_dot_data(dot_string)
-    graph = graphs[0]  
-    graph.write_svg(outfile_svg)
-    graph.write_svg(PATH_IMAGE_BPMN_LARK_SVG)
-    #print(graph)  
-    graph.set('dpi', resolution_bpmn)
-    graph.write_png(outfile)    
-    return  Image.open(outfile)   
 
-def dot_sese_diagram(t, id = 0, h = 0, prob={}, imp={}, loops = {}, dur = {}, imp_names = []):
-    if type(t) == Token:
-        label = t.value
-        return dot_task(id, label, h, imp[label] if label in imp else None, dur[label] if label in dur else None, imp_names), id, id
-    if type(t) == Tree:
-        label = t.data
-        if label == 'task':
-            return dot_sese_diagram(t.children[0], id, h, prob, imp, loops, dur, imp_names)
-        code = ""
-        id_enter = id
-        last_id = id_enter + 1
-        child_ids = []
-        for i, c in enumerate(t.children):
-            if (label != 'natural' or i != 1) and (label != 'choice' or i != 1) and (label != 'loop_probability' or i !=0 ):
-                dot_code, enid, exid = dot_sese_diagram(c, last_id, h, prob, imp, loops, dur, imp_names)
-                code += f'\n {dot_code}'
-                child_ids.append((enid, exid))
-                last_id = exid + 1
-        if label != "sequential":    
-            id_exit = last_id
-            if label == "choice":
-                code += dot_exclusive_gateway(id_enter)
-                code += dot_exclusive_gateway(id_exit)
-            elif label == 'natural':
-                code += dot_probabilistic_gateway(id_enter)
-                code += dot_probabilistic_gateway(id_exit)
-            elif label in {'loop', 'loop_probability'}: 
-                code += dot_loop_gateway(id_enter)
-                if label == 'loop':
-                    code += dot_loop_gateway(id_exit)
-                else:
-                    code += dot_loop_gateway(id_exit)
-            else: 
-                label_sym = '+'    
-                node_label = f'[shape=diamond label="{label_sym}" style="filled" fillcolor=yellowgreen]'
-                code += f'\n node_{id_enter}{node_label};'
-                id_exit = last_id
-                code += f'\n node_{id_exit}{node_label};'
-        else: 
-            id_enter = child_ids[0][0]
-            id_exit = child_ids[-1][1]    
-        edge_labels = ['','',''] 
-        if label == "natural":
-            prob_key = t.children[1].value
-            edge_labels = [f'{prob[prob_key] if prob_key  in prob else 0.5 }',
-                           f'{round(1 - prob[prob_key], 2) if prob_key  in prob else 0.5 }']
-        if label == "loop_probability":
-            prob_key = t.children[0].value
-            proba = loops[prob_key] if prob_key  in loops else 0.5
-            edge_labels = ['',f'{proba}']
-        if label != "sequential":
-            for ei,i in enumerate(child_ids):
-                edge_label = edge_labels[ei]
-                code += f'\n node_{id_enter} -> node_{i[0]} [label="{edge_label}"];'
-                code += f'\n node_{i[1]} -> node_{id_exit};'
-            if label in  {'loop', 'loop_probability'}:  
-                code += f'\n node_{id_exit} -> node_{id_enter} [label="{edge_labels[1]}"];'
-        else:
-            for ei,i in enumerate(child_ids):
-                edge_label = edge_labels[ei]
-                if ei != 0:
-                    code += f'\n node_{child_ids[ei - 1][1]} -> node_{i[0]} [label="{edge_label}"];'              
-    return code, id_enter, id_exit
+import argparse
+from pathlib import Path
 
-def wrap_sese_diagram(tree, h = 0, probabilities={}, impacts={}, loop_thresholds = {}, durations={}, names={}, delays={}, impacts_names=[]):
-    code, id_enter, id_exit = dot_sese_diagram(tree, 0, h, probabilities, impacts, loop_thresholds, durations, imp_names = impacts_names)   
-    code = '\n start[label="" style="filled" shape=circle fillcolor=palegreen1]' +   '\n end[label="" style="filled" shape=doublecircle fillcolor=orangered] \n' + code
-    code += f'\n start -> node_{id_enter};'
-    code += f'\n node_{id_exit} -> end;'
-    return code
+# Share the parser and drawing code with the notebook and generator. The old
+# copy imported a nonexistent env module and rendered XORs as parallel gateways.
+from sese_diagram import (
+    PARSER as SESE_PARSER,
+    PATH_IMAGE_BPMN_LARK,
+    PATH_IMAGE_BPMN_LARK_SVG,
+    RESOLUTION,
+    dot_sese_diagram,
+    dot_task,
+    dot_exclusive_gateway,
+    dot_probabilistic_gateway,
+    dot_loop_gateway,
+    dot_parallel_gateway,
+    dot_rectangle_node,
+    get_tasks,
+    print_sese_diagram,
+    wrap_sese_diagram,
+)
+from stats import max_independent_xor, max_nested_xor
 
-def get_tasks(t):
-    trees = [subtree for subtree in t.iter_subtrees()]
-    v = {subtree.children[0].value for subtree in   filter(lambda x: x.data == 'task', trees)}
-    return v
 
-def dot_task(id, name, h=0, imp=None, dur=None, imp_names = []):
-    label = name
-    #print(f"impacts in dot task : {imp}")
-    if imp is not None: # modifica per aggiungere impatti e durate in modo leggibile 
-        if h == 0:
-            imp =  ", ".join(f"{key}: {value}" for key, value in zip(imp_names, imp))
-            label += f", impacts: {imp}"
-            label += f", dur: {str(dur)}"  
-        else: 
-            label += str(imp[0:-h])
-            label += str(imp[-h:]) 
-            label += f", dur:{str(dur)}"   
-    return f'\n node_{id}[label="{label}", shape=rectangle style="rounded,filled" fillcolor="lightblue"];'
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--expression", help="process expression; default: (! (T1 ^ T2))")
+    source.add_argument("--file", type=Path, help="benchmark text file, one process per line")
+    parser.add_argument("--process-number", type=int, default=1, help="one-based line number in --file")
+    parser.add_argument("--output", type=Path, default=Path("bpmn_preview"), help="output path stem for PNG and SVG")
+    args = parser.parse_args(argv)
+    if args.process_number < 1:
+        parser.error("--process-number must be at least 1")
+    expression = args.expression or "(! (T1 ^ T2))"
+    if args.file:
+        processes = args.file.read_text(encoding="utf-8").splitlines()
+        if args.process_number > len(processes):
+            parser.error(f"{args.file} contains only {len(processes)} processes")
+        expression = processes[args.process_number - 1]
 
-def dot_exclusive_gateway(id, label="X"):
-    return f'\n node_{id}[shape=diamond label={label} style="filled" fillcolor=orange];'
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    png_path = args.output.with_suffix(".png")
+    svg_path = args.output.with_suffix(".svg")
+    diagram = print_sese_diagram(expression, outfile=str(png_path), outfile_svg=str(svg_path))
+    diagram.close()
+    print(f"Nesting (XOR + loop): {max_nested_xor(expression)}")
+    print(f"Independent (XOR + loop): {max_independent_xor(expression)}")
+    print(f"PNG: {png_path.resolve()}")
+    print(f"SVG: {svg_path.resolve()}")
 
-def dot_probabilistic_gateway(id, label="N"):
-    return f'\n node_{id}[shape=diamond label={label} style="filled" fillcolor=orange];' 
 
-def dot_loop_gateway(id, label="X"):
-    return f'\n node_{id}[shape=diamond label={label} style="filled" fillcolor=yellow];' 
-
-def dot_parallel_gateway(id, label="+"):
-    return f'\n node_{id}[shape=diamond label={label} style="filled" fillcolor=yellowgreen];'
-
-def dot_rectangle_node(id, label):
-    return f'\n node_{id}[shape=rectangle label={label}];'  
+if __name__ == "__main__":
+    main()

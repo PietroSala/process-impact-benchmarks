@@ -2,6 +2,7 @@
 exec(open("sese_diagram.py").read())
 
 def max_nested_xor(expression):
+    """Maximum depth of XOR and loop regions (legacy function name)."""
     tree = PARSER.parse(expression)
     
     def _max_nested_xor(node):
@@ -9,7 +10,7 @@ def max_nested_xor(expression):
             return 0
         
         if isinstance(node, Tree):
-            if node.data == 'xor':
+            if node.data in ['xor', 'xor_probability', 'loop']:
                 return max(_max_nested_xor(child) for child in node.children) + 1
             elif node.data in ['sequential', 'parallel']:
                 return max(_max_nested_xor(child) for child in node.children)
@@ -19,6 +20,11 @@ def max_nested_xor(expression):
     return _max_nested_xor(tree)
 
 def max_independent_xor(expression):
+    """Maximum independent XOR/loop count (legacy function name).
+
+    A loop contributes at least one, preserving its body's independent count
+    when that count is larger. Sequence and parallel regions add their counts.
+    """
     tree = PARSER.parse(expression)
     
     def _max_independent_xor(node):
@@ -26,7 +32,7 @@ def max_independent_xor(expression):
             return 0
         
         if isinstance(node, Tree):
-            if node.data == 'xor':
+            if node.data in ['xor', 'xor_probability', 'loop']:
                 max_child = max(_max_independent_xor(child) for child in node.children)
                 return max(1, max_child)
             elif node.data in ['sequential', 'parallel']:
@@ -55,6 +61,9 @@ def max_theoretical_pareto_length(node):
         return 1
     
     if isinstance(node, Tree):
+        if node.data == 'loop':
+            return max_theoretical_pareto_length(node.children[0])
+
         if len(node.children) != 2:
             raise ValueError(f"Expected 2 children for node {node.data}, got {len(node.children)}")
         

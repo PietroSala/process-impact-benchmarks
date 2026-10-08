@@ -21,6 +21,7 @@ PROCESS_GRAMMAR = r"""
 ?region: 
      | NAME   -> task
      | "(" xor ")"
+     | "(" "!" xor ")" -> loop
 
 %import common.CNAME -> NAME
 %import common.NUMBER
@@ -124,14 +125,22 @@ RESOLUTION = 300
 
 def print_sese_diagram(expression, h = 0, probabilities={}, impacts={}, loop_thresholds = {}, outfile=PATH_IMAGE_BPMN_LARK, outfile_svg = PATH_IMAGE_BPMN_LARK_SVG,
                         graph_options = {}, durations = {}, names = {}, delays = {}, impacts_names = [], resolution_bpmn = RESOLUTION):
+    # Import at render time: stats itself uses this module's parser.
+    from stats import max_nested_xor, max_independent_xor
+
     tree = PARSER.parse(expression)
     diagram = wrap_sese_diagram(tree=tree, h=h, probabilities=probabilities, impacts=impacts, loop_thresholds=loop_thresholds, durations=durations, names=names, delays=delays, impacts_names=impacts_names)
     global_options = f'graph[ { ", ".join([k+"="+str(graph_options[k]) for k in graph_options])  } ];'
     dot_string = "digraph my_graph{ \n rankdir=LR; \n" + global_options + "\n" + diagram +"}"
     graphs = pydot.graph_from_dot_data(dot_string)
     graph = graphs[0]  
+    if 'label' not in graph_options:
+        graph.set_label(
+            f'Nesting (XOR + loop): {max_nested_xor(expression)} | '
+            f'Independent (XOR + loop): {max_independent_xor(expression)}'
+        )
+        graph.set_labelloc('t')
     graph.write_svg(outfile_svg)
-    graph.write_svg(PATH_IMAGE_BPMN_LARK_SVG)
     graph.set('dpi', resolution_bpmn)
     graph.write_png(outfile)    
     return Image.open(outfile)
@@ -176,6 +185,8 @@ def dot_sese_diagram(t, id = 0, h = 0, prob={}, imp={}, loops = {}, dur = {}, im
             id_enter = child_ids[0][0]
             id_exit = child_ids[-1][1]    
         edge_labels = ['','',''] 
+        if label == 'loop':
+            edge_labels[1] = 'loop'
         if label == "natural":
             prob_key = t.children[1].value
             edge_labels = [f'{prob[prob_key] if prob_key  in prob else 0.5 }',
@@ -190,7 +201,7 @@ def dot_sese_diagram(t, id = 0, h = 0, prob={}, imp={}, loops = {}, dur = {}, im
                 code += f'\n node_{id_enter} -> node_{i[0]} [label="{edge_label}"];'
                 code += f'\n node_{i[1]} -> node_{id_exit};'
             if label in  {'loop', 'loop_probability'}:  
-                code += f'\n node_{id_exit} -> node_{id_enter} [label="{edge_labels[1]}"];'
+                code += f'\n node_{id_exit} -> node_{id_enter} [label="{edge_labels[1]}", constraint=false];'
         else:
             for ei,i in enumerate(child_ids):
                 edge_label = edge_labels[ei]
